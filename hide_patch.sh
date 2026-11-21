@@ -72,13 +72,14 @@ def f_banner(s):
 
     # linux_banner：dmesg 横幅。6.6 里用宏拼接，所以贪婪到分号
     pat1 = re.compile(r'const\s+char\s+linux_banner\s*\[\s*\]\s*=\s*.*?;\n', re.S)
-    s2, n1 = pat1.subn(C_DEF % ('linux_banner', ORIG_LINE), s, count=1)
+    # 必须用 lambda：直接传字符串会被 re.sub 再解释一遍转义，\n 变成真换行
+    s2, n1 = pat1.subn(lambda m: C_DEF % ('linux_banner', ORIG_LINE), s, count=1)
     if n1:
         s, changed = s2, True
 
     # linux_proc_banner：/proc/version 用
     pat2 = re.compile(r'const\s+char\s+linux_proc_banner\s*\[\s*\]\s*=\s*.*?;\n', re.S)
-    s3, n2 = pat2.subn(C_DEF % ('linux_proc_banner', ORIG_LINE), s, count=1)
+    s3, n2 = pat2.subn(lambda m: C_DEF % ('linux_proc_banner', ORIG_LINE), s, count=1)
     if n2:
         s, changed = s3, True
 
