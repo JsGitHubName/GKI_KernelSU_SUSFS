@@ -64,26 +64,23 @@ def f_taint(s):
     return pat.sub(r'\1\n\treturn;  /* hide: taint suppressed */', s, count=1)
 
 
-# ---------- 2) banner 两个变量 ----------
+# ---------- 2) linux_banner（dmesg 横幅，在 init/version-timestamp.c） ----------
 def f_banner(s):
     if 'g7e1f3c083cc6' in s:
         return None
-    changed = False
-
-    # linux_banner：dmesg 横幅。6.6 里用宏拼接，所以贪婪到分号
     pat1 = re.compile(r'const\s+char\s+linux_banner\s*\[\s*\]\s*=\s*.*?;\n', re.S)
     # 必须用 lambda：直接传字符串会被 re.sub 再解释一遍转义，\n 变成真换行
     s2, n1 = pat1.subn(lambda m: C_DEF % ('linux_banner', ORIG_LINE), s, count=1)
-    if n1:
-        s, changed = s2, True
+    return s2 if n1 else None
 
-    # linux_proc_banner：/proc/version 用
-    pat2 = re.compile(r'const\s+char\s+linux_proc_banner\s*\[\s*\]\s*=\s*.*?;\n', re.S)
-    s3, n2 = pat2.subn(lambda m: C_DEF % ('linux_proc_banner', ORIG_LINE), s, count=1)
-    if n2:
-        s, changed = s3, True
 
-    return s if changed else None
+# ---------- 2') linux_proc_banner（/proc/version 用，在 init/version.c） ----------
+def f_procbanner(s):
+    if 'g7e1f3c083cc6' in s:
+        return None
+    pat = re.compile(r'const\s+char\s+linux_proc_banner\s*\[\s*\]\s*=\s*.*?;\n', re.S)
+    s2, n = pat.subn(lambda m: C_DEF % ('linux_proc_banner', ORIG_LINE), s, count=1)
+    return s2 if n else None
 
 
 # ---------- 2b) fs/proc/version.c 改 seq_puts ----------
@@ -115,7 +112,8 @@ def f_mshow(s):
 
 
 patch('kernel/panic.c', f_taint, 'taint')
-patch('init/version-timestamp.c', f_banner, 'banner')
+patch('init/version-timestamp.c', f_banner, 'linux-banner')
+patch('init/version.c', f_procbanner, 'proc-banner')
 patch('fs/proc/version.c', f_procver, 'proc-version')
 patch('kernel/module/procfs.c', f_mshow, 'modules-filter')
 
