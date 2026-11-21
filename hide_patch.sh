@@ -1,9 +1,9 @@
 #!/bin/bash
-# hide_patch.sh v2 — 编译前注入隐藏补丁
+# hide_patch.sh v3 — 编译前注入隐藏补丁
 #
 #   1. add_taint() 直接 return          → tainted 恒为 0
 #   2. linux_banner / linux_proc_banner  → /proc/version 与原厂一致
-#      + fs/proc/version.c 改用 seq_puts → 避免格式串无占位符的 -Wformat 警告
+#      + fs/proc/version.c 改用 seq_puts
 #   3. m_show() 跳过指定模块            → /proc/modules 不出现 kernelsu/paradise
 set -u
 
@@ -24,12 +24,16 @@ import sys
 root = sys.argv[1]
 results = []
 
-# 原厂 /proc/version 的完整内容（注意 Dec 与 8 之间是两个空格）
+# 原厂 /proc/version 内容。
+# 用 raw string，保证 C 代码里得到的是字面 \n 而不是真实换行。
 ORIG_LINE = (
-    'Linux version 6.6.89-android15-8-g7e1f3c083cc6-abogki467167594-4k '
-    '(kleaf@build-host) (Android (12481755, +pgo, +bolt, +lto, +mlgo, based on r522817) '
-    'clang version 18.0.1) #1 SMP PREEMPT Mon Dec  8 04:00:43 UTC 2025\\n'
+    r'Linux version 6.6.89-android15-8-g7e1f3c083cc6-abogki467167594-4k '
+    r'(kleaf@build-host) (Android (12481755, +pgo, +bolt, +lto, +mlgo, based on r522817) '
+    r'clang version 18.0.1) #1 SMP PREEMPT Mon Dec  8 04:00:43 UTC 2025\n'
 )
+
+# C 源里要写的完整定义（\n 和 \t 是真的换行/缩进，只有结尾那个 \n 是字面量）
+C_DEF = 'const char %s[] =\n\t"%s";\n'
 
 
 def patch(rel, fn, tag):
@@ -66,17 +70,15 @@ def f_banner(s):
         return None
     changed = False
 
-    # linux_banner：dmesg 开头的横幅。6.6 里用宏拼接，所以用贪婪到分号的方式
+    # linux_banner：dmesg 横幅。6.6 里用宏拼接，所以贪婪到分号
     pat1 = re.compile(r'const\s+char\s+linux_banner\s*\[\s*\]\s*=\s*.*?;\n', re.S)
-    repl1 = 'const char linux_banner[] =\n\t"%s";\n' % ORIG_LINE
-    s2, n1 = pat1.subn(repl1, s, count=1)
+    s2, n1 = pat1.subn(C_DEF % ('linux_banner', ORIG_LINE), s, count=1)
     if n1:
         s, changed = s2, True
 
-    # linux_proc_banner：/proc/version 用，同样硬编码成完整串
+    # linux_proc_banner：/proc/version 用
     pat2 = re.compile(r'const\s+char\s+linux_proc_banner\s*\[\s*\]\s*=\s*.*?;\n', re.S)
-    repl2 = 'const char linux_proc_banner[] =\n\t"%s";\n' % ORIG_LINE
-    s3, n2 = pat2.subn(repl2, s, count=1)
+    s3, n2 = pat2.subn(C_DEF % ('linux_proc_banner', ORIG_LINE), s, count=1)
     if n2:
         s, changed = s3, True
 
@@ -87,8 +89,8 @@ def f_banner(s):
 def f_procver(s):
     if 'hide: seq_puts' in s:
         return None
-    pat = re.compile(
-        r'seq_printf\s*\(\s*m\s*,\s*linux_proc_banner\s*,.*?\)\s*;', re.S)
+    # 用 [^;]* 跨越 utsname() 这类内部括号，一直吃到分号
+    pat = re.compile(r'seq_printf\s*\(\s*m\s*,\s*linux_proc_banner\s*,[^;]*;', re.S)
     repl = 'seq_puts(m, linux_proc_banner);  /* hide: seq_puts */'
     return pat.sub(repl, s, count=1)
 
@@ -119,6 +121,15 @@ patch('kernel/module/procfs.c', f_mshow, 'modules-filter')
 print('\n[hide] ===== 结果 =====')
 for tag, rel, st in results:
     print('[hide] %-14s %-20s %s' % (tag, st, rel))
+
+# 打印实际写入的 banner 片段，方便核对
+p = os.path.join(root, 'init/version-timestamp.c')
+if os.path.exists(p):
+    txt = open(p, encoding='utf-8', errors='replace').read()
+    i = txt.find('linux_proc_banner')
+    if i >= 0:
+        print('[hide] --- 写入内容 ---')
+        print(txt[max(0, i - 60):i + 320])
 
 bad = [r for r in results if r[2] in ('MISS', 'PATTERN-NOT-FOUND') or r[2].startswith('ERR')]
 if bad:
