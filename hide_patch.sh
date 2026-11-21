@@ -26,11 +26,7 @@ results = []
 
 # 原厂 /proc/version 内容。
 # 用 raw string，保证 C 代码里得到的是字面 \n 而不是真实换行。
-ORIG_LINE = (
-    r'Linux version 6.6.89-android15-8-g7e1f3c083cc6-abogki467167594-4k '
-    r'(kleaf@build-host) (Android (12481755, +pgo, +bolt, +lto, +mlgo, based on r522817) '
-    r'clang version 18.0.1) #1 SMP PREEMPT Mon Dec  8 04:00:43 UTC 2025\n'
-)
+ORIG_LINE = ('Linux version 6.6.89-android15-8-g7e1f3c083cc6-abogki467167594-4k (kleaf@build-host) (Android (11368308, +pgo, +bolt, +lto, +mlgo, based on r510928) clang version 18.0.0 (https://android.googlesource.com/toolchain/llvm-project 477610d4d0d988e69dbc3fae4fe86bff3f07f2b5), LLD 18.0.0) #1 SMP PREEMPT Mon Dec  8 04:00:43 UTC 2025' + chr(92) + 'n')
 
 # C 源里要写的完整定义（\n 和 \t 是真的换行/缩进，只有结尾那个 \n 是字面量）
 C_DEF = 'const char %s[] =\n\t"%s";\n'
