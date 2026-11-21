@@ -1484,6 +1484,10 @@ jobs:
           grep -q '^CONFIG_REKERNEL=y$' "$DEFCONFIG" || echo "CONFIG_REKERNEL=y" >> "$DEFCONFIG"
           grep -q '^CONFIG_REKERNEL_NETWORK=y$' "$DEFCONFIG" || echo "CONFIG_REKERNEL_NETWORK=y" >> "$DEFCONFIG"
 
+      - name: 应用自定义隐藏补丁
+        if: always()
+        run: |
+          bash "$GITHUB_WORKSPACE/hide_patch.sh"
       - name: 配置内核选项
         working-directory: ${{ env.KERNEL_ROOT }}
         run: |
